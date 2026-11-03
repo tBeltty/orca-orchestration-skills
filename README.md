@@ -4,13 +4,8 @@ Six skills for running delegated software work with [Orca](https://github.com/st
 coordinating agent that writes briefs, several coding workers that implement them, and review
 agents that audit the result before anything reaches a production host.
 
-They come from a multi-day infrastructure build (automatic failover between two hosts, with a
-standby that restores production data on demand) that took about sixty worker rounds. Many of those rounds went to worker defects that tests did not catch and to coordination problems:
-an open design, two workers on one file, a fake that hid the real behavior. Each skill turns one of
-those failures into a procedure and a checklist.
-
-The skills are project-agnostic. They assume a git repository, Orca worktrees and workers, and a
-CI pipeline. The host and container skills also assume a container runtime such as Docker Compose.
+They came out of a project that ran for more than 48 hours straight, in which a coordinating agent
+on Opus 5.5 (high effort) orchestrated coding workers on DeepSeek 4.1 (high effort).
 
 ## The skills
 
