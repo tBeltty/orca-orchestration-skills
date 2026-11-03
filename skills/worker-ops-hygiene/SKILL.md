@@ -25,8 +25,8 @@ orca orchestration worker-start --run <run-id> --spec "$(cat brief.md)" \
 
 ## Watching workers
 
-Run one background watchdog per batch of workers. It exits, and so wakes the coordinator, on any
-of three events:
+Run one background watchdog per batch of workers. It exits, and so wakes the coordinating agent, on
+any of three events:
 
 1. an orchestration message that is **not** a heartbeat (filter heartbeats in every format the
    orchestrator uses, with or without brackets, any case);
@@ -38,12 +38,9 @@ When the watchdog fires, read the message it printed before acting.
 
 ## Checking a completion report
 
-When a worker reports completion:
-
-1. read its commits (`git log <base>..HEAD`);
-2. confirm the tree is clean (`git status --porcelain`);
-3. check that nothing outside its owned files changed;
-4. only then stop its process.
+Before stopping a worker that reports completion, confirm its commits exist and its tree is clean
+(`git log <base>..HEAD`, `git status --porcelain`). The full review of the delivery is in
+`delivery-review`.
 
 ## Stopping a worker for real
 
@@ -56,9 +53,9 @@ After every stop:
 - list the processes whose working directory is the worktree, and check they are gone;
 - watch file modification times in the worktree for a minute (`find <wt> -newer <mark>`);
 - check `git worktree list` and `git branch` for entries you did not create;
-- if anything still writes, stop the shared agent server (in the Orca versions observed, the orchestrator starts it
-  again) and check again. Restarting it also drops the sessions of other workers, so do it between rounds when
-  possible.
+- if anything still writes, stop the shared agent server (in the Orca versions observed, the
+  orchestrator starts it again) and check again. Restarting it also drops the sessions of other
+  workers, so do it between rounds when possible.
 
 Never kill a worker because of a single watchdog signal. Confirm the worker is idle or finished
 first.
@@ -66,14 +63,14 @@ first.
 ## Cleaning up
 
 - Remove a worktree as soon as its branch is integrated, after confirming it is clean.
-- Branches may stay; worktrees and their dependency copies should not.
+- Delete the dependency copies with the worktree; branches can stay.
 - Before ending a session, list worktrees and leave only those the owner opened.
 - Stop every background watcher, test run and dev server the session started.
 
 ## Checklist
 
 - [ ] Each worker has one worktree, one brief and a recorded dispatch id.
-- [ ] A watchdog filters heartbeats and permission prompts and uses a long idle window.
+- [ ] A watchdog ignores heartbeats, fires on permission prompts and uses a long idle window.
 - [ ] Every completion was checked against commits and a clean tree before the stop.
 - [ ] Every stop was verified by processes, file times, worktrees and branches.
-- [ ] Integrated worktrees are removed.
+- [ ] Integrated worktrees are removed, and every process the session started is stopped.

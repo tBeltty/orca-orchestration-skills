@@ -1,53 +1,47 @@
 # Example: rehearsal logs
 
-Rehearsal output from a fictional project, as `rehearsal-hardening` asks for it. Values are
-placeholders. Every step is timed, and every failure names its cause.
+Rehearsal output for a fictional one-off job in app-b: move accounts from a retired plan to its
+replacement and email each affected account. Values are placeholders. Every step is timed and
+counted, and every failure names its cause.
 
 ## A failing run that explains itself
 
 ```
-rehearsal timing: preflight    0s
-rehearsal timing: decrypt      0s
-rehearsal timing: links        1s
-rehearsal timing: files       41s
-rehearsal timing: db-restore  33s
-rehearsal timing: db-up        9s
-compose up: Error response from daemon: ... error mounting "/dev/shm/rehearsal/app-c/.env"
-  to rootfs at "/app/.env": make mountpoint "/app/.env": read-only file system
-stack diagnose: app-c: State=created, ExitCode=0
-stack diagnose: proxy: State=exited, ExitCode=1
-stack diagnose: proxy log: [emerg] host not found in upstream "app-c"
-REHEARSAL FAILED at stack: these services are not running: app-c proxy
-rehearsal teardown done (0 containers, 0 volumes, 0 secret files left)
+rehearsal: target=scratch database restored from the latest backup, egress blocked
+rehearsal timing: restore-copy     48s
+rehearsal timing: select            2s  accounts=18234 eligible=1207
+rehearsal timing: migrate-plans    31s  updated=1180 failed=27
+migrate-plans: first failure at account 4821: invalid input value for enum plan_tier: "legacy "
+migrate-plans: all 27 failures have a trailing space in plan_tier
+rehearsal timing: notify            3s  recorded=1180 sent=0
+REHEARSAL FAILED at migrate-plans: 27 accounts not migrated
+rehearsal teardown done (scratch database dropped, 0 recorder files left)
 ```
 
 What this run says without any extra investigation:
 
-1. The restore steps completed (files, database restore, database startup, each timed).
-2. One bind mount targets a path inside a read-only mount, so its mountpoint cannot be created, and
-   the runtime stopped creating the remaining services.
-3. The proxy failure follows from the first error and is not a second defect.
+1. The selection and the update ran, and the counts show how many accounts each step touched.
+2. The 27 failures share one cause: stored plan names with a trailing space. The job needs to
+   normalize the value before the lookup.
+3. Nothing reached a real inbox: 1,180 messages were recorded and none sent.
 
 ## A passing run
 
 ```
-rehearsal timing: preflight    0s
-rehearsal timing: decrypt      0s
-rehearsal timing: links        2s
-rehearsal timing: files       33s
-rehearsal timing: db-restore  28s
-rehearsal timing: db-up        9s
-rehearsal timing: stack        7s
-rehearsal timing: verify       0s
-rehearsal hosts: app-a.example.com=200 app-b.example.com=200 app-c.example.com=200
-rehearsal teardown done (0 containers, 0 volumes, 0 secret files left)
-total 79s
+rehearsal: target=scratch database restored from the latest backup, egress blocked
+rehearsal timing: restore-copy     47s
+rehearsal timing: select            2s  accounts=18234 eligible=1207
+rehearsal timing: migrate-plans    33s  updated=1207 failed=0
+rehearsal timing: notify            4s  recorded=1207 sent=0
+rehearsal timing: verify            1s  plan counts match the expected table
+rehearsal teardown done (scratch database dropped, 0 recorder files left)
+total 87s
 ```
 
-## Live-drill list kept next to the rehearsal
+## Live checks kept next to the rehearsal
 
-| Behavior | Why the rehearsal cannot prove it | Drill |
+| Behavior | Why the rehearsal cannot prove it | Live check |
 |---|---|---|
-| Log shipping while the standby is primary | Archiving is off in a rehearsal | Cut the primary's network, write a marker row on the standby, fail back, find the row |
-| Public routing switch | The rehearsal touches no DNS | Same drill, watch the hostnames move |
-| Recovery after a power cut | Needs the real boot path | Unplug the primary, unlock it, watch it rejoin as a replica |
+| Email delivery | Messages are recorded and never sent | Run a first batch of 50 accounts and check delivery and bounces before the rest |
+| Contention with live traffic | The copy has no users | Run outside peak hours and watch lock waits during the first batch |
+| Provider rate limits | The recorder has none | Send in batches under the provider's documented limit |

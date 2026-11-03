@@ -6,7 +6,7 @@ description: Use before dispatching any coding worker through Orca. Builds a sel
 # Worker brief builder
 
 A worker only knows what the brief tells it. Many wasted rounds in a delegated build come from
-briefs that leave the design open, assign a file to two workers, or accept a test whose fake decides
+briefs that leave the design open, assign a file to two workers or accept a test whose fake decides
 the result. This skill turns a task into a brief that avoids those three failures.
 
 ## Before writing the brief
@@ -33,7 +33,7 @@ A contract is ready for a worker when it states all of these:
 | Interfaces | Exact endpoints, payloads, file paths and exit codes on both sides. |
 | Out of scope | What the worker must not touch. |
 
-Send the contract to a reviewer (an audit agent or a second worker) and fix what it finds before
+Send the contract to a reviewer (a review agent or a second worker) and fix what it finds before
 any implementation brief goes out.
 
 ## Brief template
@@ -42,7 +42,7 @@ any implementation brief goes out.
 Worker name: <name>. <One-line goal>. Worktree: <worktree>, based on <commit>.
 Read first: <the contract>, <the project rules file>, <the files to change>.
 You own ONLY: <paths>. Do not edit anything else. No push, no version bump,
-nothing against a production or staging host.
+nothing against a production or staging environment.
 
 Build:
 1. <item, with the acceptance condition>
@@ -50,9 +50,9 @@ Build:
 
 Prove it on the real thing:
 - <the exact command that runs the tests on the CI platform>
-- <the real binary or real container check for each external tool this change drives>
-- <the installed-layout check: where each file lands, which uid reads it, which mode it needs>
-A shim may replace a network or an external service. It may never model the behavior a test claims
+- <the real-dependency check for each database, browser, tool or API this change drives>
+- <the shipped-form check: build or pack the artifact, install it in a clean place, run it>
+A fake may replace a network or an external service. It may never model the behavior a test claims
 to prove.
 
 Done means: <command> exits 0 on <platform A> AND <platform B>, and <observable result>.
@@ -62,18 +62,20 @@ Report: the commits, the test totals on both platforms, anything in the contract
 
 ## Follow-up rounds
 
-- Separate blockers from should-fix items and nits. Send all should-fix items and nits of one
-  review in a single round.
+- Label each finding blocker, should-fix or nit, and send every finding of one review in a single
+  round, blockers first.
 - Quote the reviewer's evidence (file, line, scenario) in the brief so the worker does not
   rediscover it.
-- When a real run failed, paste the exact error lines (redacted) and the step timings. Ask for
-  observability first if the error is invisible.
+- When a real run failed, paste the exact error lines (redacted) and the step timings. If the run
+  left no error output, first ask for the logging that `rehearse-risky-operations` describes.
 
 ## Checklist before dispatch
 
 - [ ] Contract reviewed, or the task needs none.
 - [ ] Every file in scope has exactly one owner.
 - [ ] Previous workers on this task are stopped and verified stopped.
-- [ ] The brief names the CI platform command and the real-binary checks.
+- [ ] The brief names the CI platform command, the real-dependency checks and the
+      shipped-form check.
 - [ ] "Done" is a command with an exit code, on every platform the code runs on.
-- [ ] The brief forbids pushes, version bumps and host changes unless the task is exactly that.
+- [ ] The brief forbids pushes, version bumps and changes to shared environments unless the task
+      is exactly that.

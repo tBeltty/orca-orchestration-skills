@@ -1,55 +1,56 @@
 # Example: a reviewed contract
 
-A contract for a fictional standby takeover, in the shape `worker-brief-builder` asks for. It is
-short on purpose: each section answers one question a worker would otherwise guess.
+A contract for a fictional CSV contact import in app-a, in the shape `worker-brief-builder` asks
+for. It is short on purpose: each section answers one question a worker would otherwise guess.
 
 ## Components
 
-- **Controller**: decides when the standby takes over. Runs on a schedule, keeps its state in a
-  single-writer store.
-- **Standby agent**: runs on the standby host, executes a takeover order.
-- **Primary**: sends a heartbeat every 30 s.
+- **Upload endpoint**: accepts a CSV file and creates an import record.
+- **Import job**: a background job that reads the file and writes contacts in batches.
+- **Status view**: shows the user the progress and the rows that failed.
 
 ## Identity
 
-- The "who is primary" marker is an object in shared storage containing `primary-a` or `standby-b`.
-- Two writes of the same word produce identical content, so the content (and any content hash) does
-  not identify a write. Each write is identified by a per-write value the storage returns (an object version id where
-  the storage provides one, plus the upload time), or by a sequence number the writer stores inside
-  the object.
+- Each import gets an id at upload. Two uploads of the same file are two imports, so the file's
+  hash does not identify an import.
+- A row is identified by `(import_id, row_number)`. A contact is identified by its normalized email
+  within an account.
 
 ## Ownership
 
 | Field | Written by | Read by |
 |---|---|---|
-| Marker object | Controller (takeover), primary (return) | Everyone |
-| Heartbeat time | Controller, on each heartbeat | Controller |
-| Episode record | Controller only | Controller |
-| Agent state (`idle`, `restoring`, `serving`, `failed`) | Standby agent only | Controller (poll) |
+| Import record (`status`, `total_rows`) | Upload endpoint creates it; import job updates it | Status view |
+| `processed_rows`, `failed_rows` | Import job only | Status view |
+| Contacts | Import job only | The rest of the app |
+| Row errors | Import job only | Status view, error download |
 
 ## Concurrency
 
-- Two controller runs may overlap. A takeover starts only through one atomic `claim` operation in
-  the store, which re-reads mode, maintenance, heartbeat and episode at claim time.
-- The marker is written with a conditional put on the version that was read. A failed condition
-  aborts the takeover.
+- Two job runners may pick the same import after a retry. A runner starts only after an atomic
+  claim: `UPDATE imports SET status = 'running', claimed_by = $1, claimed_at = now() WHERE id = $2
+  AND (status = 'queued' OR (status = 'running' AND claimed_at < now() - interval '10 minutes'))`.
+  Zero updated rows means another runner owns the import.
+- Two imports in one account may write the same contact. Writes are an upsert on
+  `(account_id, email)`; a later import overwrites a field only with a non-empty value.
 
 ## Failure modes
 
 | Failure | Behavior |
 |---|---|
-| Controller run dies after the claim, before recording the marker version | The next run adopts the marker if it reads `standby-b` and was uploaded after the claim; otherwise it drops the episode and alerts. |
-| Order lost | The controller resends with a fresh nonce; the agent answers 409 for a duplicate of a running episode. |
-| Standby reboots while serving | The agent reports `needs-secrets`; the controller resends; the agent resumes without restoring again. |
-| Storage unreachable | No decision this run; alert after three runs. |
+| The runner crashes mid-file | The claim expires after 10 minutes. The next runner resumes from `processed_rows`, which is committed in the same transaction as each batch of 500 rows. |
+| A row is malformed | The row goes to the row errors with its number and reason; the import continues. |
+| More than 20% of the rows fail | The import stops as `failed`. Contacts already written stay, and the user sees the error list. |
+| The file is not valid UTF-8 or not CSV | The upload endpoint answers 422 before creating any record. |
 
 ## Interfaces
 
-- `POST /takeover` on the agent: signed body `{v, episode, ts, nonce, report_url, report_token, bundle}`;
-  replies 202, 409 or 401.
-- `GET /status` on the agent: `{state, episode, step, since}`.
+- `POST /imports` (multipart, field `file`): 201 `{id}`, 413 over 10 MB, 422 for an invalid file.
+- `GET /imports/:id`: `{status, total_rows, processed_rows, failed_rows}`, where `status` is
+  `queued`, `running`, `done` or `failed`.
+- `GET /imports/:id/errors.csv`: columns `row,reason`.
 
 ## Out of scope
 
-- The return path (failback). It has its own contract.
-- Public routing changes other than the hostnames listed in the configuration.
+- Deleting contacts that are missing from the file.
+- Formats other than CSV.
