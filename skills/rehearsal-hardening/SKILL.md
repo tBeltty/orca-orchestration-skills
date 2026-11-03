@@ -10,6 +10,9 @@ tools) only appear when the code runs on the real host with real data. A recover
 never run end to end usually fails the first time it is needed. A rehearsal mode lets it run often
 without touching production.
 
+The rehearsal runs on the standby host, never on the primary, and the primary keeps serving traffic
+the whole time. It reads the production backups and writes nothing back to them.
+
 ## Design the rehearsal mode
 
 The rehearsal runs the same steps as the real recovery, in the same order, with these differences:

@@ -9,6 +9,11 @@ A test suite that passes on a laptop shows only that the code works on that lapt
 runs on another operating system, inside a container, or through a tool the test replaces with a fake, the local result says
 little about production. This skill closes that gap with three checks.
 
+"Real" here means the same platform and the same binaries as production, never production itself.
+Every check in this skill runs on a developer machine, a CI runner or a throwaway container, with
+dummy data and dummy credentials. None of them connects to a production host, its data or its
+secrets.
+
 ## 1. Run the suite where CI runs it
 
 Developer machines and CI runners differ in ways that break shell code:
